@@ -47,15 +47,17 @@ jobs:
       - name: Rename Output IPA
         id: rename
         run: |
-          # Menjalankan rename.py dan menetapkan output IPA yang sudah di-rename
-          RENAMED_IPA_PATH=$(python3 tools/rename.py)
+          RENAMED_IPA_PATH=$(python3 tools/rename.py package/input.ipa)  # Correct path for rename.py
           echo "final_ipa_path=$RENAMED_IPA_PATH" >> $GITHUB_ENV
+
+      - name: Debug final IPA path
+        run: echo "Final IPA Path: ${{ env.final_ipa_path }}"
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: release-${{ github.run_id }}
           name: Release ${{ github.run_id }}
-          files: ${{ env.final_ipa_path }}  # Menggunakan variabel env yang dihasilkan oleh step sebelumnya
+          files: ${{ env.final_ipa_path }}
           draft: false
           prerelease: false
