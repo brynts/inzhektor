@@ -1,82 +1,73 @@
-name: Patch IPA
+name: Build & Patch IPA
 
 on:
   workflow_dispatch:
     inputs:
       ipa_url:
-        description: 'Direct download / Google Drive link'
+        description: "Link direct atau Google Drive"
         required: true
+        type: string
 
 jobs:
-  patch:
+  build:
     runs-on: ubuntu-latest
+
     env:
       WORKSPACE_DIR: ${{ github.workspace }}
       IPA_LINK_INPUT: ${{ github.event.inputs.ipa_url }}
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Install Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
+    - name: Install Python dependencies
+      run: pip install --upgrade pip
 
-      - name: Setup folder
-        run: |
-          PACKAGE_DIR="${WORKSPACE_DIR}/package"
-          mkdir -p "$PACKAGE_DIR"
-          echo "Direktori '$PACKAGE_DIR' telah dibuat."
+    - name: Download ipapatch binary
+      run: |
+        wget -q https://github.com/asdfzxcvbn/ipapatch/releases/download/v1.1.2/ipapatch.linux-amd64 -O ipapatch
+        chmod +x ipapatch
+        sudo mv ipapatch /usr/local/bin/ipapatch
 
-      - name: Download IPA ke folder package, mkdir, convert jika GDrive, rename ke input.ipa
-        id: prepare
-        run: |
-          PACKAGE_DIR="${WORKSPACE_DIR}/package"
-          TARGET_IPA_IN_PACKAGE="${PACKAGE_DIR}/input.ipa"
+    - name: Download IPA ke folder package
+      id: download_ipa
+      run: |
+        PACKAGE_DIR="${WORKSPACE_DIR}/package"
+        mkdir -p "$PACKAGE_DIR"
+        TARGET_IPA_IN_PACKAGE="${PACKAGE_DIR}/input.ipa"
 
-          if [[ "$IPA_LINK_INPUT" == *"drive.google.com"* ]]; then
-            echo "Link Google Drive terdeteksi. Menggunakan tools/converter.py."
-            if [ ! -f "tools/converter.py" ]; then
-              echo "::error::Skrip tools/converter.py tidak ditemukan di repositori."
-              exit 1
-            fi
-            python tools/converter.py "$IPA_LINK_INPUT" -o "$TARGET_IPA_IN_PACKAGE"
-          else
-            echo "Link direct terdeteksi. Mengunduh..."
-            wget -q -O "$TARGET_IPA_IN_PACKAGE" "$IPA_LINK_INPUT"
-          fi
+        if [[ "$IPA_LINK_INPUT" == *"drive.google.com"* ]]; then
+          echo "Google Drive terdeteksi"
+          python3 tools/converter.py "$IPA_LINK_INPUT" > direct.txt
+          wget -q -O "$TARGET_IPA_IN_PACKAGE" "$(cat direct.txt)"
+        else
+          wget -q -O "$TARGET_IPA_IN_PACKAGE" "$IPA_LINK_INPUT"
+        fi
 
-          if [ ! -s "$TARGET_IPA_IN_PACKAGE" ]; then
-            echo "::error::Gagal mengunduh atau menyiapkan '$TARGET_IPA_IN_PACKAGE', atau file kosong."
-            exit 1
-          fi
+        if [ ! -s "$TARGET_IPA_IN_PACKAGE" ]; then
+          echo "::error::Gagal mengunduh atau file kosong."
+          exit 1
+        fi
 
-          echo "input_ipa_for_main_py=${TARGET_IPA_IN_PACKAGE}" >> $GITHUB_OUTPUT
-          echo "IPA telah disiapkan di '$TARGET_IPA_IN_PACKAGE'"
+    - name: Jalankan main.py
+      run: python3 main.py
 
-      - name: Download ipapatch binary
-        run: |
-          curl -L https://github.com/asdfzxcvbn/ipapatch/releases/download/v1.1.2/ipapatch.linux-amd64 -o ipapatch
-          chmod +x ipapatch
-          sudo mv ipapatch /usr/local/bin/ipapatch
+    - name: Rename patched IPA
+      run: python3 tools/rename.py
 
-      - name: Run patching script
-        run: python3 main.py
+    - name: Baca nama file output
+      id: read_output
+      run: |
+        IPA_OUTPUT=$(cat output_filename.txt)
+        echo "ipa_path=${IPA_OUTPUT}" >> $GITHUB_OUTPUT
 
-      - name: Ambil nama file hasil patch
-        id: output
-        run: |
-          FILE=$(ls package/*.ipa | grep -v input.ipa)
-          echo "ipa_file=$FILE" >> $GITHUB_OUTPUT
-
-      - name: Create or update release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: release-$(date +'%Y-%m-%d')
-          name: Release $(date +'%Y-%m-%d')
-          files: ${{ steps.output.outputs.ipa_file }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload ke release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: release-${{ github.run_id }}
+        name: Release ${{ github.run_id }}
+        files: ${{ steps.read_output.outputs.ipa_path }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
