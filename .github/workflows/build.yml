@@ -49,6 +49,7 @@ jobs:
         run: |
           # Menjalankan rename.py dan menetapkan output IPA yang sudah di-rename
           RENAMED_IPA_PATH=$(python3 tools/rename.py)
+          echo "Renamed IPA path: $RENAMED_IPA_PATH"
           echo "final_ipa_path=$RENAMED_IPA_PATH" >> $GITHUB_ENV
 
       - name: Release
@@ -56,6 +57,6 @@ jobs:
         with:
           tag_name: release-${{ github.run_id }}
           name: Release ${{ github.run_id }}
-          files: ${{ env.final_ipa_path }}  # Using the environment variable correctly here
+          files: ${{ env.final_ipa_path }}
           draft: false
           prerelease: false
