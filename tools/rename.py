@@ -22,6 +22,6 @@ new_path = f"package/{new_name}"
 os.rename(patched_ipa, new_path)
 
 # Outputkan path file IPA yang sudah di-rename ke GitHub Actions
-print(f"Renamed IPA path: {new_path}")
+print(new_path)  # Pastikan output hanya berupa path file IPA yang baru
 with open(os.environ['GITHUB_OUTPUT'], "a") as out:
     out.write(f"final_ipa_path={new_path}\n")
