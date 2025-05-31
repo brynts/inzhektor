@@ -8,11 +8,19 @@ if not os.path.exists(patched_ipa):
 
 # Ekstrak Info.plist dari IPA
 with zipfile.ZipFile(patched_ipa) as ipa:
+    # Mencari Info.plist di dalam folder Payload
     plist_path = next(x for x in ipa.namelist() if x.endswith("Info.plist") and x.startswith("Payload/"))
+    
     with ipa.open(plist_path) as f:
         plist = plistlib.load(f)
+        
+        # Cek apakah nilai ada di plist
         name = plist.get("CFBundleDisplayName") or plist.get("CFBundleName") or "App"
         version = plist.get("CFBundleShortVersionString") or "0.0"
+        
+        # Debug: Print nilai yang ditemukan
+        print(f"CFBundleDisplayName: {name}")
+        print(f"CFBundleShortVersionString: {version}")
 
 # Tentukan nama baru untuk IPA
 new_name = f"{name}_v{version}.ipa".replace(" ", "_")
