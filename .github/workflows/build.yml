@@ -1,0 +1,144 @@
+name: Build and Release Patched IPA
+
+on:
+  workflow_dispatch: # Pemicu manual
+    inputs:
+      ipa_url: # 2. Form input direct link/google drive
+        description: 'Link unduh IPA (langsung atau Google Drive)'
+        required: true
+        type: string
+
+jobs:
+  build_and_release_ipa:
+    runs-on: ubuntu-latest # 1. Runner Linux (menggunakan amd64 secara default)
+    permissions:
+      contents: write # Diperlukan untuk membuat/memperbarui rilis
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        # Asumsi tools/converter.py dan main.py ada di repositori ini
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10' # Atau versi Python yang kamu gunakan
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Jika converter.py atau main.py butuh dependensi, instal di sini
+          # Contoh: pip install requests gdown
+          echo "Instalasi dependensi Python (jika ada) selesai."
+
+      - name: Get current date for release tag
+        id: get_date
+        run: echo "tag_date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Download and setup ipapatch
+        id: setup_ipapatch
+        run: |
+          # 2. Gunakan binary dari official release
+          IPAPATCH_URL="https://github.com/asdfzxcvbn/ipapatch/releases/download/v1.1.2/ipapatch.linux-amd64"
+          echo "Mengunduh ipapatch dari $IPAPATCH_URL"
+          wget -q -O ${{ github.workspace }}/ipapatch_downloaded "$IPAPATCH_URL"
+          
+          if [ ! -s "${{ github.workspace }}/ipapatch_downloaded" ]; then
+            echo "::error::Gagal mengunduh binary ipapatch."
+            exit 1
+          fi
+          
+          mv ${{ github.workspace }}/ipapatch_downloaded ${{ github.workspace }}/ipapatch
+          chmod +x ${{ github.workspace }}/ipapatch
+          echo "ipapatch_executable=${{ github.workspace }}/ipapatch" >> $GITHUB_OUTPUT
+          echo "Setup ipapatch selesai. Versi:"
+          ${{ github.workspace }}/ipapatch --version
+
+      - name: Prepare IPA input
+        id: prepare_ipa
+        env:
+          IPA_LINK_INPUT: ${{ github.event.inputs.ipa_url }}
+          WORKSPACE_DIR: ${{ github.workspace }}
+        run: |
+          # 3. Download IPA ke folder package, mkdir, convert jika GDrive, rename ke input.ipa
+          PACKAGE_DIR="${WORKSPACE_DIR}/package"
+          mkdir -p "$PACKAGE_DIR"
+          echo "Direktori '$PACKAGE_DIR' telah dibuat."
+
+          TARGET_IPA_IN_PACKAGE="${PACKAGE_DIR}/input.ipa"
+
+          if [[ "$IPA_LINK_INPUT" == *"drive.google.com"* ]]; then
+            echo "Link Google Drive terdeteksi. Menggunakan tools/converter.py."
+            if [ ! -f "tools/converter.py" ]; then # Pastikan skrip ada
+              echo "::error::Skrip tools/converter.py tidak ditemukan di repositori."
+              exit 1
+            fi
+            python tools/converter.py "$IPA_LINK_INPUT" -o "$TARGET_IPA_IN_PACKAGE"
+          else
+            echo "Link direct terdeteksi. Mengunduh..."
+            wget -q -O "$TARGET_IPA_IN_PACKAGE" "$IPA_LINK_INPUT"
+          fi
+
+          if [ ! -s "$TARGET_IPA_IN_PACKAGE" ]; then
+            echo "::error::Gagal mengunduh atau menyiapkan '$TARGET_IPA_IN_PACKAGE', atau file kosong."
+            exit 1
+          fi
+          # Path ini akan diberikan ke main.py sebagai --ipa_input_original
+          echo "input_ipa_for_main_py=${TARGET_IPA_IN_PACKAGE}" >> $GITHUB_OUTPUT
+          echo "IPA telah disiapkan di '$TARGET_IPA_IN_PACKAGE'"
+
+      - name: Run main.py for patching
+        id: run_main_script # ID untuk mengakses outputnya
+        env:
+          # Variabel lingkungan untuk main.py
+          IPAPATCH_EXEC_PATH: ${{ steps.setup_ipapatch.outputs.ipapatch_executable }}
+          # main.py akan menerima path ini dan menyalinnya ke dalam struktur 'package' internalnya
+          ORIGINAL_IPA_TO_PROCESS: ${{ steps.prepare_ipa.outputs.input_ipa_for_main_py }}
+        run: |
+          # 4. Jalankan main.py untuk patch ipa
+          if [ ! -f "main.py" ]; then # Pastikan skrip ada
+            echo "::error::Skrip main.py tidak ditemukan di repositori."
+            exit 1
+          fi
+          
+          echo "Menjalankan main.py..."
+          # main.py diharapkan mengatur output 'final_ipa_path' dan 'final_ipa_filename'
+          # melalui GITHUB_OUTPUT (seperti pada draf main.py sebelumnya)
+          python main.py \
+            --ipapatch_tool "$IPAPATCH_EXEC_PATH" \
+            --ipa_input_original "$ORIGINAL_IPA_TO_PROCESS"
+          
+          echo "Eksekusi main.py selesai."
+
+      - name: Create or Update Release and Upload Asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Token otomatis dari GitHub
+          TAG_DATE: ${{ steps.get_date.outputs.tag_date }}
+          # 5. Ambil hasil file ipa dari main.py (melalui output step)
+          FINAL_IPA_PATH_FROM_MAIN: ${{ steps.run_main_script.outputs.final_ipa_path }}
+        run: |
+          echo "Tanggal rilis (tag): $TAG_DATE"
+          echo "File IPA yang akan diunggah: $FINAL_IPA_PATH_FROM_MAIN"
+
+          if [ -z "$FINAL_IPA_PATH_FROM_MAIN" ]; then
+            echo "::error::Path ke file IPA final kosong. Pastikan main.py mengatur output 'final_ipa_path'."
+            exit 1
+          fi
+          if [ ! -f "$FINAL_IPA_PATH_FROM_MAIN" ]; then
+            echo "::error::File IPA final '$FINAL_IPA_PATH_FROM_MAIN' tidak ditemukan."
+            ls -la ${{ github.workspace }} # Daftar isi workspace untuk debug
+            exit 1
+          fi
+
+          # 6. Create release sesuai tanggal, jika sudah ada, tambahkan aset (jangan hapus yg lama)
+          # Cek apakah rilis sudah ada, jika belum, buat baru
+          gh release view "$TAG_DATE" || gh release create "$TAG_DATE" \
+            --title "Rilis Patch Harian - $TAG_DATE" \
+            --notes "Kumpulan file IPA yang dipatch pada $TAG_DATE."
+          
+          # Unggah aset. `gh release upload` secara default akan menambahkan aset baru
+          # dan tidak akan menghapus aset lain dengan nama berbeda.
+          # Jika aset dengan nama yang sama persis diunggah lagi, ia akan menimpanya.
+          gh release upload "$TAG_DATE" "$FINAL_IPA_PATH_FROM_MAIN"
+          
+          echo "Aset '$FINAL_IPA_PATH_FROM_MAIN' berhasil diunggah ke rilis $TAG_DATE."
