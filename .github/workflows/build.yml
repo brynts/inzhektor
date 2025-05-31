@@ -1,72 +1,56 @@
-name: Build & Patch IPA
+name: Patch IPA
+
+permissions:
+  contents: write
 
 on:
   workflow_dispatch:
     inputs:
       ipa_url:
-        description: "Link direct atau Google Drive"
         required: true
-        type: string
+        description: Direct atau Google Drive link
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     env:
-      WORKSPACE_DIR: ${{ github.workspace }}
       IPA_LINK_INPUT: ${{ github.event.inputs.ipa_url }}
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Install Python dependencies
-      run: pip install --upgrade pip
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
 
-    - name: Download ipapatch binary
-      run: |
-        wget -q https://github.com/asdfzxcvbn/ipapatch/releases/download/v1.1.2/ipapatch.linux-amd64 -O ipapatch
-        chmod +x ipapatch
-        sudo mv ipapatch /usr/local/bin/ipapatch
+      - name: Install dependencies
+        run: pip install -r requirements.txt || true
 
-    - name: Download IPA ke folder package
-      id: download_ipa
-      run: |
-        PACKAGE_DIR="${WORKSPACE_DIR}/package"
-        mkdir -p "$PACKAGE_DIR"
-        TARGET_IPA_IN_PACKAGE="${PACKAGE_DIR}/input.ipa"
+      - name: Download IPA
+        run: |
+          mkdir -p package
+          TARGET=package/input.ipa
+          if [[ "$IPA_LINK_INPUT" == *"drive.google.com"* ]]; then
+            python3 tools/converter.py "$IPA_LINK_INPUT" -o "$TARGET"
+          else
+            wget -q -O "$TARGET" "$IPA_LINK_INPUT"
+          fi
+          [ -s "$TARGET" ] || (echo "::error::Download gagal"; exit 1)
 
-        if [[ "$IPA_LINK_INPUT" == *"drive.google.com"* ]]; then
-          echo "Google Drive terdeteksi"
-          python3 tools/converter.py "$IPA_LINK_INPUT" -o "$TARGET_IPA_IN_PACKAGE"
-        else
-          wget -q -O "$TARGET_IPA_IN_PACKAGE" "$IPA_LINK_INPUT"
-        fi
+      - name: Patch IPA
+        run: python3 main.py
 
-        if [ ! -s "$TARGET_IPA_IN_PACKAGE" ]; then
-          echo "::error::Gagal mengunduh atau file kosong."
-          exit 1
-        fi
+      - name: Rename Output IPA
+        id: rename
+        run: python3 tools/rename.py
 
-    - name: Jalankan main.py
-      run: python3 main.py
-
-    - name: Rename patched IPA
-      run: python3 tools/rename.py
-
-    - name: Baca nama file output
-      id: read_output
-      run: |
-        IPA_OUTPUT=$(cat output_filename.txt)
-        echo "ipa_path=${IPA_OUTPUT}" >> $GITHUB_OUTPUT
-
-    - name: Upload ke release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: release-${{ github.run_id }}
-        name: Release ${{ github.run_id }}
-        files: ${{ steps.read_output.outputs.ipa_path }}
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: release-${{ github.run_id }}
+          name: Release ${{ github.run_id }}
+          files: ${{ steps.rename.outputs.final_ipa_path }}
+          draft: false
+          prerelease: false
