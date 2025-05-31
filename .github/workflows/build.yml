@@ -49,8 +49,10 @@ jobs:
         run: |
           # Menjalankan rename.py dan menetapkan output IPA yang sudah di-rename
           RENAMED_IPA_PATH=$(python3 tools/rename.py)
-          echo "Renamed IPA path: $RENAMED_IPA_PATH"
+    
+          # Menulis output path IPA yang sudah di-rename
           echo "final_ipa_path=$RENAMED_IPA_PATH" >> $GITHUB_ENV
+          echo "Renamed IPA path: $RENAMED_IPA_PATH"
 
       - name: Release
         uses: softprops/action-gh-release@v1
