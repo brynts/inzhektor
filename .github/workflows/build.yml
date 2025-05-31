@@ -28,6 +28,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt || true
 
+      - name: Download ipapatch
+        run: |
+          curl -L https://github.com/asdfzxcvbn/ipapatch/releases/latest/download/ipapatch.linux-amd64 -o ipapatch
+          chmod +x ipapatch
+
       - name: Download IPA
         run: |
           mkdir -p package
