@@ -38,8 +38,7 @@ jobs:
 
         if [[ "$IPA_LINK_INPUT" == *"drive.google.com"* ]]; then
           echo "Google Drive terdeteksi"
-          python3 tools/converter.py "$IPA_LINK_INPUT" > direct.txt
-          wget -q -O "$TARGET_IPA_IN_PACKAGE" "$(cat direct.txt)"
+          python3 tools/converter.py "$IPA_LINK_INPUT" -o "$TARGET_IPA_IN_PACKAGE"
         else
           wget -q -O "$TARGET_IPA_IN_PACKAGE" "$IPA_LINK_INPUT"
         fi
