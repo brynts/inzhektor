@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import zipfile
 import plistlib
@@ -14,7 +16,11 @@ with zipfile.ZipFile(patched_ipa) as ipa:
     )
     with ipa.open(plist_path) as f:
         plist = plistlib.load(f)
-        name = plist.get("CFBundleDisplayName") or plist.get("CFBundleName") or os.path.basename("package/input.ipa").replace(".ipa", "")
+        print(f"Full plist: {plist}", file=sys.stderr)  # Log isi lengkap untuk debug
+        name = plist.get("CFBundleDisplayName") or plist.get("CFBundleName")
+        if not name:
+            name = os.path.basename("package/input.ipa").replace(".ipa", "")
+            print("Warning: Using input file name as fallback due to missing CFBundleDisplayName", file=sys.stderr)
         version = plist.get("CFBundleShortVersionString") or "0.0"
 
 print(f"CFBundleDisplayName: {name}", file=sys.stderr)
@@ -25,4 +31,5 @@ new_path = f"package/{new_name}"
 
 os.rename(patched_ipa, new_path)
 
+# ONLY output path IPA di stdout
 sys.stdout.write(new_path)
