@@ -69,10 +69,10 @@ jobs:
           # Hapus file sementara
           rm temp.plist
 
-     Tec- Name: Release
+      - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: release-${{ github.run_id }
+          tag_name: release-${{ github.run_id }}
           name: Release ${{ github.run_id }}
           files: ${{ env.final_ipa_path }}
           draft: false
