@@ -27,7 +27,7 @@ jobs:
 
       - name: Download ipapatch
         run: |
-          curl -L https://github.com/asdfzxcvbn/ipapatch/releases/latest/download/ipapatch.darwin-amd64 -o ipapatch
+          curl -L https://github.com/asdfzxcvbn/ipapatch/releases/download/v1.1.2/ipapatch.macos-arm64 -o ipapatch
           chmod +x ipapatch
 
       - name: Download IPA
