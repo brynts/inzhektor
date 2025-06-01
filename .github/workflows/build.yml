@@ -46,10 +46,17 @@ jobs:
           # Menjalankan main.py untuk patch IPA
           python3 main.py
           # Ekstrak Info.plist dari Payload/*.app/Info.plist
-          unzip -p package/patched.ipa "Payload/*/Info.plist" > temp.plist
+          unzip -p package/patched.ipa "Payload/*/Info.plist" > temp.plist || (echo "::error::Gagal ekstrak Info.plist"; exit 1)
+          # Debug: Tampilkan isi Info.plist
+          echo "Isi Info.plist:"
+          cat temp.plist
           # Ambil CFBundleDisplayName dan CFBundleShortVersionString
           DISPLAY_NAME=$(PlistBuddy -c "Print CFBundleDisplayName" temp.plist 2>/dev/null || echo "input")
           VERSION=$(PlistBuddy -c "Print CFBundleShortVersionString" temp.plist 2>/dev/null || echo "0.0")
+          echo "CFBundleDisplayName: $DISPLAY_NAME"
+          echo "CFBundleShortVersionString: $VERSION"
+          # Sanitasi DISPLAY_NAME untuk menghindari karakter tidak valid
+          DISPLAY_NAME=$(echo "$DISPLAY_NAME" | tr -d '[:space:]/\\')
           # Rename file IPA menjadi {CFBundleDisplayName}_v{CFBundleShortVersionString}.ipa
           NEW_IPA_NAME="${DISPLAY_NAME}_v${VERSION}.ipa"
           mv package/patched.ipa "package/${NEW_IPA_NAME}"
