@@ -44,10 +44,7 @@ jobs:
       - name: Extract Original Metadata
         run: |
           unzip -p package/input.ipa "Payload/*/Info.plist" > temp.plist
-          DISPLAY_NAME=$(plutil -extract CFBundleDisplayName xml1 -o - temp.plist | grep -o '<string>[^<]*</string>' | sed 's/<string>`\(.*\)`<\/string>/\1/')
-          VERSION=$(plutil -extract CFBundleShortVersionString xml1 -o - temp.plist | grep -o '<string>[^<]*</string>' | sed 's/<string>`\(.*\)`<\/string>/\1/')
-          echo "ORIGINAL_DISPLAY_NAME=${DISPLAY_NAME:-input}" >> $GITHUB_ENV
-          echo "ORIGINAL_VERSION=${VERSION:-0.0}" >> $GITHUB_ENV
+          python3 -c "import plistlib, os; plist = plistlib.load(open('temp.plist', 'rb')); display_name = plist.get('CFBundleDisplayName', 'input'); version = plist.get('CFBundleShortVersionString', '0.0'); print(f'ORIGINAL_DISPLAY_NAME={display_name}'); print(f'ORIGINAL_VERSION={version}')" >> $GITHUB_ENV
           rm temp.plist
 
       - name: Patch IPA
