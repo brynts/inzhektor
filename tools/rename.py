@@ -19,14 +19,15 @@ with zipfile.ZipFile(patched_ipa) as ipa:
         print(f"Full plist: {plist}", file=sys.stderr)  # Log isi lengkap untuk debug
         name = plist.get("CFBundleDisplayName") or plist.get("CFBundleName")
         if not name:
-            name = os.path.basename("package/input.ipa").replace(".ipa", "")
-            print("Warning: Using input file name as fallback due to missing CFBundleDisplayName", file=sys.stderr)
+            name = plist.get("BUNDLE_ID", os.path.basename("package/input.ipa").replace(".ipa", ""))
+            if name == os.path.basename("package/input.ipa").replace(".ipa", ""):
+                print("Warning: Using input file name as fallback due to missing CFBundleDisplayName and BUNDLE_ID", file=sys.stderr)
         version = plist.get("CFBundleShortVersionString") or "0.0"
 
 print(f"CFBundleDisplayName: {name}", file=sys.stderr)
 print(f"CFBundleShortVersionString: {version}", file=sys.stderr)
 
-new_name = f"{name}_v{version}.ipa".replace(" ", "_")
+new_name = f"{name}_v{version}.ipa".replace(" ", "_").replace(".", "_")
 new_path = f"package/{new_name}"
 
 os.rename(patched_ipa, new_path)
