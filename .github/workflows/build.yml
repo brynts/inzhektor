@@ -40,10 +40,15 @@ jobs:
             curl -L -o "$TARGET" "$IPA_LINK_INPUT"
           fi
           [ -s "$TARGET" ] || (echo "::error::Download gagal"; exit 1)
+          echo "File size: $(stat -f %z "$TARGET") bytes"
+
+      - name: Verify IPA Integrity
+        run: unzip -t package/input.ipa
 
       - name: Extract Original Metadata
         run: |
           unzip -p package/input.ipa "Payload/*/Info.plist" > temp.plist
+          cat temp.plist
           DISPLAY_NAME=$(PlistBuddy -c "Print CFBundleDisplayName" temp.plist 2>/dev/null || echo "input")
           VERSION=$(PlistBuddy -c "Print CFBundleShortVersionString" temp.plist 2>/dev/null || echo "0.0")
           echo "Extracted DISPLAY_NAME: $DISPLAY_NAME"
