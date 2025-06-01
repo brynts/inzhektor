@@ -25,6 +25,9 @@ jobs:
         with:
           python-version: 3.11
 
+      - name: Install Plist Utilities
+        run: sudo apt-get update && sudo apt-get install -y libplist-utils
+
       - name: Download ipapatch
         run: |
           curl -L https://github.com/asdfzxcvbn/ipapatch/releases/latest/download/ipapatch.linux-amd64 -o ipapatch
@@ -41,11 +44,12 @@ jobs:
           fi
           [ -s "$TARGET" ] || (echo "::error::Download gagal"; exit 1)
 
-      - name: Extract Original Metadata
+      - name: Extract and Convert Original Metadata
         run: |
           unzip -p package/input.ipa "Payload/*/Info.plist" > temp.plist
-          python3 -c "import plistlib, os; plist = plistlib.load(open('temp.plist', 'rb')); display_name = plist.get('CFBundleDisplayName', 'input'); version = plist.get('CFBundleShortVersionString', '0.0'); print(f'ORIGINAL_DISPLAY_NAME={display_name}'); print(f'ORIGINAL_VERSION={version}')" >> $GITHUB_ENV
-          rm temp.plist
+          plutil -convert xml1 temp.plist -o temp.xml
+          python3 -c "import plistlib, os; plist = plistlib.load(open('temp.xml', 'rb')); display_name = plist.get('CFBundleDisplayName', 'input'); version = plist.get('CFBundleShortVersionString', '0.0'); print(f'ORIGINAL_DISPLAY_NAME={display_name}'); print(f'ORIGINAL_VERSION={version}')" >> $GITHUB_ENV
+          rm temp.plist temp.xml
 
       - name: Patch IPA
         run: python3 main.py
@@ -62,15 +66,4 @@ jobs:
           # Menjalankan rename.py dan menetapkan output IPA yang sudah di-rename
           RENAMED_IPA_PATH=$(python3 tools/rename.py)
       
-          # Menulis output path IPA yang sudah di-rename
-          echo "final_ipa_path=$RENAMED_IPA_PATH" >> $GITHUB_ENV
-          echo "Renamed IPA path: $RENAMED_IPA_PATH"
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: release-${{ github.run_id }}
-          name: Release ${{ github.run_id }}
-          files: ${{ env.final_ipa_path }}
-          draft: false
-          prerelease: false
+          # Menulis output path IPA yang
