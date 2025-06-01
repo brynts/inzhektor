@@ -4,10 +4,15 @@ import os
 import zipfile
 import plistlib
 import sys
+import os
 
 patched_ipa = "package/patched.ipa"
 if not os.path.exists(patched_ipa):
     raise FileNotFoundError("patched.ipa not found.")
+
+# Ambil dari variabel lingkungan jika ada, jika tidak gunakan fallback
+name = os.getenv("ORIGINAL_DISPLAY_NAME", os.path.basename("package/input.ipa").replace(".ipa", ""))
+version = os.getenv("ORIGINAL_VERSION", "0.0")
 
 with zipfile.ZipFile(patched_ipa) as ipa:
     plist_path = next(
@@ -17,11 +22,6 @@ with zipfile.ZipFile(patched_ipa) as ipa:
     with ipa.open(plist_path) as f:
         plist = plistlib.load(f)
         print(f"Full plist: {plist}", file=sys.stderr)  # Log isi lengkap untuk debug
-        name = plist.get("CFBundleDisplayName")  # Hanya gunakan CFBundleDisplayName
-        if not name:
-            name = os.path.basename("package/input.ipa").replace(".ipa", "")
-            print("Warning: Using input file name as fallback due to missing CFBundleDisplayName", file=sys.stderr)
-        version = plist.get("CFBundleShortVersionString") or "0.0"
 
 print(f"CFBundleDisplayName: {name}", file=sys.stderr)
 print(f"CFBundleShortVersionString: {version}", file=sys.stderr)
