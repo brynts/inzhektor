@@ -45,35 +45,52 @@ jobs:
         run: |
           # Menjalankan main.py untuk patch IPA
           python3 main.py
-          # Ekstrak Info.plist dari Payload/Spotify.app/Info.plist
-          unzip -p package/patched.ipa "Payload/Spotify.app/Info.plist" > temp.plist || (echo "::error::Gagal ekstrak Info.plist dari Payload/Spotify.app/Info.plist"; exit 60)
-          # Konversi ke format XML untuk memastikan kompatibilitas
-          plutil -convert xml1 temp.plist || (echo "::error::Gagal konversi temp.plist ke XML"; exit 61)
+          # Buat direktori sementara untuk ekstraksi
+          mkdir -p temp_payload
+          # Ekstrak Payload/Spotify.app/Info.plist
+          unzip -q package/patched.ipa "Payload/Spotify.app/Info.plist" -d temp_payload || (echo "::error::Gagal ekstrak Info.plist dari Payload/Spotify.app/Info.plist"; exit 60)
+          # Periksa apakah file Info.plist ada
+          if [ ! -f temp_payload/Payload/Spotify.app/Info.plist ]; then
+            echo "::error::Info.plist tidak ditemukan di Payload/Spotify.app/Info.plist"
+            exit 61
+          fi
+          # Konversi ke format XML
+          plutil -convert xml1 temp_payload/Payload/Spotify.app/Info.plist -o temp.plist || (echo "::error::Gagal konversi Info.plist ke XML"; exit 62)
           # Debug: Tampilkan isi Info.plist
           echo "Isi Info.plist:"
           cat temp.plist
-          # Ambil CFBundleDisplayName dan CFBundleShortVersionString
-          DISPLAY_NAME=$(PlistBuddy -c "Print CFBundleDisplayName" temp.plist 2>/dev/null || echo "input")
-          VERSION=$(PlistBuddy -c "Print CFBundleShortVersionString" temp.plist 2>/dev/null || echo "0.0")
+          # Ambil CFBundleDisplayName dan CFBundleShortVersionString dengan PlistBuddy
+          DISPLAY_NAME=$(PlistBuddy -c "Print CFBundleDisplayName" temp.plist 2>/dev/null || echo "")
+          VERSION=$(PlistBuddy -c "Print CFBundleShortVersionString" temp.plist 2>/dev/null || echo "")
+          # Fallback ke plutil jika PlistBuddy gagal
+          if [ -z "$DISPLAY_NAME" ]; then
+            DISPLAY_NAME=$(plutil -p temp.plist | grep "CFBundleDisplayName" | awk -F" => " '{print $2}' | tr -d '"')
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION=$(plutil -p temp.plist | grep "CFBundleShortVersionString" | awk -F' => "' '{print $2}' | tr -d '"}')
+          fi
+          # Default jika masih kosong
+          [ -z "$DISPLAY_NAME" ] && DISPLAY_NAME="input"
+          [ -z "$VERSION" ] && VERSION="0.0"
           echo "CFBundleDisplayName: $DISPLAY_NAME"
           echo "CFBundleShortVersionString: $VERSION"
-          # Sanitasi DISPLAY_NAME untuk menghindari karakter tidak valid
+          # Sanitasi DISPLAY_NAME
           DISPLAY_NAME=$(echo "$DISPLAY_NAME" | tr -d '[:space:]/\\')
-          # Ganti . dengan _ di versi untuk nama file
+          # Ganti . dengan _ di versi
           VERSION=$(echo "$VERSION" | tr '.' '_')
           # Rename file IPA menjadi {CFBundleDisplayName}_v{version}.ipa
           NEW_IPA_NAME="${DISPLAY_NAME}_v${VERSION}.ipa"
           mv package/patched.ipa "package/${NEW_IPA_NAME}"
-          # Simpan path IPA yang sudah diganti nama ke GITHUB_ENV
+          # Simpan path IPA ke GITHUB_ENV
           echo "final_ipa_path=package/${NEW_IPA_NAME}" >> $GITHUB_ENV
-          # Hapus file sementara
-          rm temp.plist
+          # Bersihkan direktori sementara
+          rm -rf temp_payload temp.plist
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: release-${{ github.run_id }}
           name: Release ${{ github.run_id }}
-          files: ${{ env.final_ipa_path }}
-          draft: false
+          files: "${{ env.final_ipa_path }}"
+          draft: true
           prerelease: false
