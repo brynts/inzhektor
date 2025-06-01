@@ -14,10 +14,9 @@ with zipfile.ZipFile(patched_ipa) as ipa:
     )
     with ipa.open(plist_path) as f:
         plist = plistlib.load(f)
-        name = plist.get("CFBundleDisplayName") or plist.get("CFBundleName") or "App"
+        name = plist.get("CFBundleDisplayName") or plist.get("CFBundleName") or os.path.basename("package/input.ipa").replace(".ipa", "")
         version = plist.get("CFBundleShortVersionString") or "0.0"
 
-# Logging ke stderr (supaya tidak masuk stdout)
 print(f"CFBundleDisplayName: {name}", file=sys.stderr)
 print(f"CFBundleShortVersionString: {version}", file=sys.stderr)
 
@@ -26,5 +25,4 @@ new_path = f"package/{new_name}"
 
 os.rename(patched_ipa, new_path)
 
-# ONLY output path IPA di stdout
 sys.stdout.write(new_path)
