@@ -45,8 +45,10 @@ jobs:
         run: |
           # Menjalankan main.py untuk patch IPA
           python3 main.py
-          # Ekstrak Info.plist dari Payload/*.app/Info.plist
-          unzip -p package/patched.ipa "Payload/*/Info.plist" > temp.plist || (echo "::error::Gagal ekstrak Info.plist"; exit 1)
+          # Ekstrak Info.plist dari Payload/Spotify.app/Info.plist
+          unzip -p package/patched.ipa "Payload/Spotify.app/Info.plist" > temp.plist || (echo "::error::Gagal ekstrak Info.plist dari Payload/Spotify.app/Info.plist"; exit 60)
+          # Konversi ke format XML untuk memastikan kompatibilitas
+          plutil -convert xml1 temp.plist || (echo "::error::Gagal konversi temp.plist ke XML"; exit 61)
           # Debug: Tampilkan isi Info.plist
           echo "Isi Info.plist:"
           cat temp.plist
@@ -57,7 +59,9 @@ jobs:
           echo "CFBundleShortVersionString: $VERSION"
           # Sanitasi DISPLAY_NAME untuk menghindari karakter tidak valid
           DISPLAY_NAME=$(echo "$DISPLAY_NAME" | tr -d '[:space:]/\\')
-          # Rename file IPA menjadi {CFBundleDisplayName}_v{CFBundleShortVersionString}.ipa
+          # Ganti . dengan _ di versi untuk nama file
+          VERSION=$(echo "$VERSION" | tr '.' '_')
+          # Rename file IPA menjadi {CFBundleDisplayName}_v{version}.ipa
           NEW_IPA_NAME="${DISPLAY_NAME}_v${VERSION}.ipa"
           mv package/patched.ipa "package/${NEW_IPA_NAME}"
           # Simpan path IPA yang sudah diganti nama ke GITHUB_ENV
@@ -65,10 +69,10 @@ jobs:
           # Hapus file sementara
           rm temp.plist
 
-      - name: Release
+     Tec- Name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: release-${{ github.run_id }}
+          tag_name: release-${{ github.run_id }
           name: Release ${{ github.run_id }}
           files: ${{ env.final_ipa_path }}
           draft: false
