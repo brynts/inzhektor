@@ -41,15 +41,27 @@ jobs:
           fi
           [ -s "$TARGET" ] || (echo "::error::Download gagal"; exit 1)
 
+      - name: Check Original IPA Metadata
+        run: |
+          unzip -p package/input.ipa "Payload/*/Info.plist" > temp.plist
+          cat temp.plist
+          rm temp.plist
+
       - name: Patch IPA
         run: python3 main.py
+
+      - name: Check Patched IPA Metadata
+        run: |
+          unzip -p package/patched.ipa "Payload/*/Info.plist" > temp.plist
+          cat temp.plist
+          rm temp.plist
 
       - name: Rename Output IPA
         id: rename
         run: |
           # Menjalankan rename.py dan menetapkan output IPA yang sudah di-rename
           RENAMED_IPA_PATH=$(python3 tools/rename.py)
-    
+      
           # Menulis output path IPA yang sudah di-rename
           echo "final_ipa_path=$RENAMED_IPA_PATH" >> $GITHUB_ENV
           echo "Renamed IPA path: $RENAMED_IPA_PATH"
